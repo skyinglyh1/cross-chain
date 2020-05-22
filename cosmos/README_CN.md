@@ -16,12 +16,38 @@ Cosmos-sdk是首个将区块链架构模块化的公有链。与以太坊上的�
 - [**Cosmos子链**](https://github.com/ontio/cross-chain/blob/master/eth/ethereum_relayer_manual_CN.md)：任意集成了<code>crosschain</code>模块的Cosmos子链都可以通过发送跨链请求实现Cosmos子链到其他任意目标链的跨链功能。
 
 ## 背景
-### Cosmos Proof证明
-TODO
 
+### Cosmos轻客户端协议
+
+轻客户端只需要同步区块链轻量的区块头信息，并且只需要最少的处理来安全的验证区块最近的状态，协议主要包括验证者集合和带签名的可信区块头。
+
+假定轻客户端有一个安全可信的初始区块头inithead，基于该初始区块头，轻客户端需要验证后续其他的区块头newhead是否可信。
+
+### Cosmos的State Proof
+
+#### Merkle Tree
+
+Simple Merkle Tree有两类节点，叶子节点和内部节点，叶子节点的hash为SHA256(0x00 || leaf_data),内部节点的hash为SHA256(0x01 || left_hash || right_hash)。
+
+将状态数据按照上述节点组织起来，最后会得到一个根节点为Merkle Root。
+
+要验证某一个叶子节点上的状态数据，只需要其Merkle Proof Path和Merle Root，就可以证明叶子节点是否包含了指定的状态数据。
+
+#### IAVL Tree
+
+cosmos的状态存储采用的IAVL Tree。
+
+IAVL Tree是AVL Tree的变种，和AVL Tree一样，它是平衡二叉搜索树，每个节点，包括叶子节点和内部节点都有Key，但和AVL Tree不一样的是，IAVL Tree内部节点的key是其右孩子的key。
+
+IAVL Tree的hash计算和Merkle Tree一样，其根节点即为状态树的root，根节点hash为整个状态的state root。
+
+要验证某个叶子节点上的状态数据，需要其Proof Path和State Root，就可以证明叶子节点是否包含指定的状态数据。
 
 ## 原理
-TODO
+
+在中继链运行有cosmos轻客户端协议，可以确保安全的cosmos区块头。
+
+安全的cosmos区块头中包含有当前block的State Root。提交在cosmos上发生的跨链交易的data、该data在cosmos状态树中的Proof，集合安全可信的State Root可以验证data的有效性，从而证明cosmos上发生的跨链交易。
 
 ### Cosmos链区块头同步到中继链
 TODO
