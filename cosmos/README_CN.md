@@ -68,7 +68,7 @@ TODO
 
 Cosmos子链跨链到中继链：
 
-<div align=center><img width="780" height="360" src="pic/eth2orc.png"/></div>
+<div align=center><img width="500" height="440" src="pic/cosmos2poly.png"/></div>
 
 ### 从中继链跨链到Cosmos链
 
@@ -81,7 +81,7 @@ Cosmos子链跨链到中继链：
 
 Cosmos子链跨链到目标链的工作流程：
 
-<div align=center><img width="550" height="400" src="pic/cross%20progress.png"/></div>
+<div align=center><img width="550" height="400" src="pic/cross_progress.png"/></div>
 
 1. 用户发送跨链交易到Cosmos子链，如Cosmos子链上的账户A通过调用<code>crosschain</code>模块的<code>Lock</code>发起跨链请求，想将1个Atom给Target Chain的账户B；
 
