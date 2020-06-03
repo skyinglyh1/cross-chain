@@ -138,15 +138,21 @@ Here, <code>ft</code> means the <code>fungible token</code>, like the asset foll
 
 Besides, this module provides other message types or interfaces for the cross chain lockproxy service providers, traditional users or dev team behind the Dapp. 
 
-As for the cross chain lockproxy service provider, there are two approaches to employ the <code>ft</cod> module.
-- 1. Cross chain service providers can construct, sign and send the message of <code>MsgCreateAndDelegateCoinToProxy</code> to create coins and delegate all the coins to the reliable <code>lockproxy</code> (also can be what we created before). The steps or flow to use <code>MsgCreateAndDelegateCoinToProxy</code> and how to integrate with <code>lockproxy</code> module are as follows.
-  - step 1. The coin creator can ask the reliable <code>lockproxy</code> creator (also can be himself) to help  do <code>BindAssetHash</code> operation, before which, the coin creator should make sure the reliable operation of <code>BindProxy</code> has already been done within the reliable <code>lockproxy</code> contract. Here, by "reliable", we mean any <code>lockproxy</code> contract, in any other blockchains connected to polychain and related to this <code>lockproxy</code> contract, should be verified and operated by the reliable operator.
-  - step 2. Coin creator asks the reliable <code>lockproxy</code> operator to do <code>BindAssetHash</code> operation to map current asset/coin to other asset hash deployed in other blockchain.
-  - step 3. After the setup done correctly, any user can receive correlated asset or coin sending from <code>lockproxy</coce> when the cross chain request coming from <code>poly chain</code> are processed completely. Also the user can use <code>bank</code> module of cosmos-sdk to send coins to other account within cosmos chain. Meanwhile, any user holding this type of coin, can construct <code>MsgLock</code> message of <code>lockproxy</code>, sign, and broadcast the message in order to request for cross chain transaction to other blockchain, like Ethereum, Ontology or Neo.
+As for the cross chain lockproxy service provider, there are two approaches to employ the <code>ft</code> module. 
 
-- 2. Cross chain service providers can also use <code>MsgCreateDenom</code> to create coins with zero initial supply, so that they can realize the cross chain functionalities without the help of <code>lockproxy</code> (or without trusting any other <code>lockproxy</code> contract).
-  - step 1. The coin creator can bind current denom or asset hash with the same asset contract hash in another blockchain by using <code>MsgBindAssetHash</code> provided within <code>ft</code> module. Normally speaking, in another blockchain, the same asset contract hash is not mapped to current denom or asset hash through <code>lockproxy</code> contract.
-  - step 2. After the setup done correctly, any user can receive correlated asset or coin minted after the cross chain request coming from <code>poly chain</code> are processed completely. Also the user can use <code>bank</code> module of cosmos-sdk to send coins to other account within cosmos chain. Meanwhile, any user holding this type of coin, can construct <code>MsgLock</code> message of <code>ft</code>, sign, and broadcast the message in order to request for cross chain transaction to other blockchain, like Ethereum, Ontology or Neo.
+Cross chain service providers can construct, sign and send the message of <code>MsgCreateAndDelegateCoinToProxy</code> to create coins and delegate all the coins to the reliable <code>lockproxy</code> (also can be what we created before). The steps or flow to use <code>MsgCreateAndDelegateCoinToProxy</code> and how to integrate with <code>lockproxy</code> module are as follows.
+
+- 1. The coin creator can ask the reliable <code>lockproxy</code> creator (also can be himself) to help  do <code>BindAssetHash</code> operation, before which, the coin creator should make sure the reliable operation of <code>BindProxy</code> has already been done within the reliable <code>lockproxy</code> contract. Here, by "reliable", we mean any <code>lockproxy</code> contract, in any other blockchains connected to polychain and related to this <code>lockproxy</code> contract, should be verified and operated by the reliable operator. 
+
+- 2. Coin creator asks the reliable <code>lockproxy</code> operator to do <code>BindAssetHash</code> operation to map current asset/coin to other asset hash deployed in other blockchain.
+
+- 3. After the setup done correctly, any user can receive correlated asset or coin sending from <code>lockproxy</code> when the cross chain request coming from <code>poly chain</code> are processed completely. Also the user can use <code>bank</code> module of cosmos-sdk to send coins to other account within cosmos chain. Meanwhile, any user holding this type of coin, can construct <code>MsgLock</code> message of <code>lockproxy</code>, sign, and broadcast the message in order to request for cross chain transaction to other blockchain, like Ethereum, Ontology or Neo.
+
+Cross chain service providers can also use <code>MsgCreateDenom</code> to create coins with zero initial supply, so that they can realize the cross chain functionalities without the help of <code>lockproxy</code> (or without trusting any other <code>lockproxy</code> contract).
+
+- 1. The coin creator can bind current denom or asset hash with the same asset contract hash in another blockchain by using <code>MsgBindAssetHash</code> provided within <code>ft</code> module. Normally speaking, in another blockchain, the same asset contract hash is not mapped to current denom or asset hash through <code>lockproxy</code> contract.
+
+- 2. After the setup done correctly, any user can receive correlated asset or coin minted after the cross chain request coming from <code>poly chain</code> are processed completely. Also the user can use <code>bank</code> module of cosmos-sdk to send coins to other account within cosmos chain. Meanwhile, any user holding this type of coin, can construct <code>MsgLock</code> message of <code>ft</code>, sign, and broadcast the message in order to request for cross chain transaction to other blockchain, like Ethereum, Ontology or Neo.
 
 In addition, any team intending to issue new coin/token can create coins with non-zero supply with the help of <code>MsgCreateCoins</code>, the initial coins are in the account of creator. 
 
@@ -198,16 +204,16 @@ type MsgCreateCoins struct {
 
 ```
 
-### <code>lockproxy</code>模块中函数或消息
+### Messages in <code>lockproxy</code> module
 
 This module contains common interface for cross chain request through <code>lockproxy</code> module. There are two types of invokers separated by the roles.
 
 As the service provider or lockproxy provider, the instruction to use <code>lockproxy</code> module are the followings.
-  1. First, the lockproxy creator invoke <code>MsgCreateLockProxy</code> to create the unique `MsgCreateLockProxy` lockproxy contract. The `lockproxy` contract is identified by the creator account address and managed by the creator, also knowns as operator.
-  2. The operator invokes `MsgBindProxyHash` to bind current <code>lockproxy</code> contract with another lockproxy contract deployed in another blockchain. Note that the operator should do bind proxy hash in other sides of blockchains.
-  3. The service provider or operator sets up the map from current asset hash (coin name or denom) to the same asset hash deployed in another blockchain. Note that the operator should do bind asset hash in other sides of blockchains.
+  - 1. First, the lockproxy creator invoke <code>MsgCreateLockProxy</code> to create the unique <code>MsgCreateLockProxy</code> lockproxy contract. The <code>lockproxy</code> contract is identified by the creator account address and managed by the creator, also knowns as operator.
+  - 2. The operator invokes <code>MsgBindProxyHash</code> to bind current <code>lockproxy</code> contract with another lockproxy contract deployed in another blockchain. Note that the operator should do bind proxy hash in other sides of blockchains.
+  - 3. The service provider or operator sets up the map from current asset hash (coin name or denom) to the same asset hash deployed in another blockchain. Note that the operator should do bind asset hash in other sides of blockchains.
 
-As the users of <code>lockproxy</code>, we can invoke <code>MsgLock</code> directly to send cross chain request. The precondition is that cross chain requester should make sure `MsgLock.FromAddress` have enough balance of coins.
+As the users of <code>lockproxy</code>, we can invoke <code>MsgLock</code> directly to send cross chain request. The precondition is that cross chain requester should make sure <code>MsgLock.FromAddress</code> have enough balance of coins.
 
 Next we explain each part of the struct in detail.
 
@@ -256,8 +262,6 @@ type MsgLock struct {
 
 
 ```
-
-
 
 
 
