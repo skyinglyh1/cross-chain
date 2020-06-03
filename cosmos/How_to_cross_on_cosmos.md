@@ -1,12 +1,12 @@
-<h1 align="center">How to Deploy Crosschain on Cosmos</h1>
+<h1 align="center">How to Do Crosschain on Cosmos</h1>
 <h4 align="center">Version 1.0 </h4>
 
-[English](how_to_cross_on_cosmos.md) | 中文
+English | [中文](how_to_cross_on_cosmos_CN.md)
 
-本文档介绍如何在Cosmos子链中添加、设置及使用跨链模块。包括如何在Cosmos子链的App中初始化不同跨链模块的Keeper，及设置当前链已有资产的跨链配置或设置当前链初始时不存在的资产配置。
+This article mainly introduces how to import, set up and employ the provided modules in your cosmos application in order to do cross chain through [poly chain](https://github.com/polynetworks).
 
-## 对于集成这些模块的Dapp开发者，如何在App中添加跨链模块呢？
-首先在<code>app.go</code>中新建这些模块的Keeper并添加到App中。
+## How to add these cross chain modules for developers intending to integrate the cross chain functionality?
+Add these created module keepers to the App in <code>app.go</code>.
 ```go
 // make sure crosschain keepr has the permission to change supply
 var (
@@ -60,9 +60,12 @@ app.ccmKeeper.MountUnlockKeeperMap(map[string]ccm.UnlockKeeper{
     lockproxy.StoreKey: app.lockproxyKeeper,
 })
 ```
-## 那么每一个模块分别有哪些功能或接口可以使用呢？
+## What method, or interface or message can be used in each module?
 
-### <code>headersync</code>模块中函数或消息
+### Message in <code>headersync</code> module
+<code>MsgSyncGenesisParam</code> is for syncing genesis blockheader of <code>poly chain</code> or the blockheader containing <code>. The key header of poly chain means these exists valid <code>[NewChainConfig](https://github.com/skyinglyh1/gaia/blob/master/x/headersync/internal/keeper/keeper.go#L182)</code>.
+
+Once the genesis header has been synced, the cosmos-relayer can be started to synchronize the key block headers, which means the poly chain block header contains valid <code>[CrossStateRoot](https://github.com/skyinglyh1/gaia/blob/master/x/headersync/poly-utils/core/types/header.go#L37)</code> that will be used to verify [proof](https://github.com/skyinglyh1/gaia/blob/master/x/ccm/internal/keeper/keeper.go#L125) submitted by cosmos-relayer and obtain the cross chain transaction message or [value](https://github.com/skyinglyh1/gaia/blob/master/x/ccm/internal/keeper/keeper.go#L174) 
 ```go
 // Msg for syncing poly chain genesis header into current cosmos chain
 type MsgSyncGenesisParam struct {
@@ -76,7 +79,13 @@ type MsgSyncHeadersParam struct {
 }
 
 ```
-### <code>ccm</code>模块中函数或消息
+### Message in <code>ccm</code> module
+Here, <code>ccm</code> means "cross chain manager" or "cross chain management". It has two functionality.
+- 1. It provides interface for cosmos-relayer to submit cross chain transaction coming from poly chain. While cosmos-relayer monitoring the poly chain, once it detacts poly chain native event aiming for current cosmos chain, it will get the proof from ledger store of poly chain and construct <code>MsgProcessCrossChainTx</code> to request for the completion of cross chain transaction in cosmos chain side. Within <code>ccm</code> module, the submitted header (as we introduced before as key header) will be verified first. The <code>CrossStateRoot</code> within verified poly chain header will be used to verify the proof. Then the actual cross chain message or transaction can be obtained. The <code>ccm</code> module then checks which module should be responsible for processing the cross chain message and execute the "unlock" logic. Currently, there are three modules can process "unlock" logic, including <code>lockproxy</code>, <code>btcx</code> and <code>ft</code>, which will be introduced later.
+- 2. It provides interface <code>CreateCrossChainTx</code> for <code>lockproxy</code>, <code>btcx</code> and <code>ft</code> modules to create cross chain transaction from current cosmos chain to another blockchain, say, Ethereum, BTCX, ONTology, or NEO. Within this interface, there will be a unique key and immutable value consisted of current cross chain transaction stored in the ledger to ensure the cross chain transaction existing in cosmos (from) side are completed successfully.
+
+Now we can easily see, <code>MsgProcessCrossChainTx</code> is for cosmos-relayer to relay cross chain tx to cosmos chain. And <code>CreateCrossChainTx</code> function is for other modules to construct cross chain tx from cosmos chain. 
+
 ```go
 // Msg for processing cross chain msg from poly chain to current cosmos chain
 // this message is designed for the cosmos-relayer to invoke
@@ -89,7 +98,7 @@ type MsgProcessCrossChainTx struct {
 }
 ```
 
-### <code>btcx</code>模块中函数或消息
+### Message in <code>btcx</code> module
 ```go
 // Msg for some organizations or service provider to create btc asset contract for cross chain usage.
 // `Createor` creates a kind of coin with name of `Denom` and redeem script of `RedeemScript`
@@ -124,19 +133,23 @@ type MsgLock struct {
 }
 ```
 
-### <code>ft</code>模块中函数或消息
-Here, <code>ft</code> means the <code>fungible token</code>,即<code>同质化资产</code>。该模块具有丰富多样的接口，可供跨链服务提供商、普通用户和发行代币的项目方使用。
-作为服务提供商，有两种方式使用<code>ft</code>模块，下面分别介绍：
-- 1、可通过调用<code>MsgCreateAndDelegateCoinToProxy</code>创建代币并委托给可信的(也可以是提供商自己创建的<code>lockproxy</code>合约)、下面将要介绍的<code>lockproxy</code>的接口。现在简单讲一下接下来需要用到的使用<code>lockproxy</code>流程。
-    - 1、代币创建者请求其所信任的<code>lockproxy</code>合约的创建者，确认其信任的<code>lockproxy</code>合约内已经做过了<code>BindProxyHash</code>的操作，注：此处“信任”的含义也包括信任<code>lockproxy</code>创建者在其他所有链进行的所有<code>BindProxyHash</code>类似操作。
-    - 2、代币创建者请求其所信任的<code>lockproxy</code>合约的创建者，调用<code>BindAssetHash</code>操作且在其他链上也进行相似的操作来设置不同链之间，相同资产的映射。
-    - 3、跨链环境设置完毕，用户可在当前Cosmos子链接收到来自<code>poly chain</code>的跨链请求后，收到对应资产代币，而且用户可通过cosmos-sdk的<code>bank</code>模块进行转账，同时任何拥有该资产的用户也可通过<code>lockproxy</code>的<code>MsgLock</code>接口将资产转到其他任意支持的链上。
+### Message in <code>ft</code> module
+Here, <code>ft</code> means the <code>fungible token</code>, like the asset follows [OEP4 protocol](https://github.com/ontio/OEPs/blob/master/OEPS/OEP-4.mediawiki) or [ERC20 protocol](https://eips.ethereum.org/EIPS/eip-20), yet it just creates coins and sends the coins to the designated account. As for the rich functionalities like "balanceOf", "approve", "allowance", "transferFrom", they are not implemented considering the built-in module <code>bank</code> in cosmos-sdk.
 
-- 2、也可通过调用<code>MsgCreateDenom</code>接口来创建初始总量为零的代币，这样后续可以不通过<code>lockproxy</code>模块来实现跨链功能；具体使用的流程如下：
-  - 1、创建代币的人通过<code>ft</code>模块内置的方法，即<code>MsgBindAssetHash</code>来绑定当前资产与另一条链上相同资产的资产哈希，具体参数的含义下面会介绍到。这里需要注意的是：另一条链上的相同资产一般不能通过<code>lockproxy</code>与当前链的当前资产进行绑定映射。
-  - 2、跨链环境设置完毕，用户可在当前Cosmos子链接收到来自<code>poly chain</code>的跨链请求后，收到对应资产代币，而且用户可通过cosmos-sdk的<code>bank</code>模块进行转账，同时任何拥有该资产的用户也可通过<code>ft</code>的<code>MsgLock</code>接口将资产转到其他任意支持的链上。也可以通过cosmos-sdk的<code>supply</code>模块来查询代币总量，是不是很方便？
+Besides, this module provides other message types or interfaces for the cross chain lockproxy service providers, traditional users or dev team behind the Dapp. 
 
-此外，发行代币的项目方可通过调用<code>MsgCreateCoins</code>接口来创建初始总量不为零的代币，且这些初始总量都在创建者的个人帐户中。项目方可通过cosmos-sdk的<code>bank</code>模块进行转账。也可通过依赖<code>lockproxy</code>来进行跨链操作。
+As for the cross chain lockproxy service provider, there are two approaches to employ the <code>ft</cod> module.
+- 1. Cross chain service providers can construct, sign and send the message of <code>MsgCreateAndDelegateCoinToProxy</code> to create coins and delegate all the coins to the reliable <code>lockproxy</code> (also can be what we created before). The steps or flow to use <code>MsgCreateAndDelegateCoinToProxy</code> and how to integrate with <code>lockproxy</code> module are as follows.
+  - step 1. The coin creator can ask the reliable <code>lockproxy</code> creator (also can be himself) to help  do <code>BindAssetHash</code> operation, before which, the coin creator should make sure the reliable operation of <code>BindProxy</code> has already been done within the reliable <code>lockproxy</code> contract. Here, by "reliable", we mean any <code>lockproxy</code> contract, in any other blockchains connected to polychain and related to this <code>lockproxy</code> contract, should be verified and operated by the reliable operator.
+  - step 2. Coin creator asks the reliable <code>lockproxy</code> operator to do <code>BindAssetHash</code> operation to map current asset/coin to other asset hash deployed in other blockchain.
+  - step 3. After the setup done correctly, any user can receive correlated asset or coin sending from <code>lockproxy</coce> when the cross chain request coming from <code>poly chain</code> are processed completely. Also the user can use <code>bank</code> module of cosmos-sdk to send coins to other account within cosmos chain. Meanwhile, any user holding this type of coin, can construct <code>MsgLock</code> message of <code>lockproxy</code>, sign, and broadcast the message in order to request for cross chain transaction to other blockchain, like Ethereum, Ontology or Neo.
+
+- 2. Cross chain service providers can also use <code>MsgCreateDenom</code> to create coins with zero initial supply, so that they can realize the cross chain functionalities without the help of <code>lockproxy</code> (or without trusting any other <code>lockproxy</code> contract).
+  - step 1. The coin creator can bind current denom or asset hash with the same asset contract hash in another blockchain by using <code>MsgBindAssetHash</code> provided within <code>ft</code> module. Normally speaking, in another blockchain, the same asset contract hash is not mapped to current denom or asset hash through <code>lockproxy</code> contract.
+  - step 2. After the setup done correctly, any user can receive correlated asset or coin minted after the cross chain request coming from <code>poly chain</code> are processed completely. Also the user can use <code>bank</code> module of cosmos-sdk to send coins to other account within cosmos chain. Meanwhile, any user holding this type of coin, can construct <code>MsgLock</code> message of <code>ft</code>, sign, and broadcast the message in order to request for cross chain transaction to other blockchain, like Ethereum, Ontology or Neo.
+
+In addition, any team intending to issue new coin/token can create coins with non-zero supply with the help of <code>MsgCreateCoins</code>, the initial coins are in the account of creator. 
+
 ```go
 // this message is for some service provider/organizations to create some fungible token with non-zero initial supply 
 // and delegate all the coins to `lockproxy` module, which will be introduced later. This coin is prepared for the target chain asset in cosmos chain.
@@ -187,17 +200,16 @@ type MsgCreateCoins struct {
 
 ### <code>lockproxy</code>模块中函数或消息
 
-该模块具有通过跨链代理合约进行跨链交易的通用接口，其调用对象有两种：
+This module contains common interface for cross chain request through <code>lockproxy</code> module. There are two types of invokers separated by the roles.
 
-作为服务提供商即代理商，应该进行如下操作来使用<code>lockproxy</code>模块。
-  1. 首先通过调用`MsgCreateLockProxy`创建属于Creator自己的lockproxy代理合约。
-  2. 代理商通过调用`MsgBindProxyHash`在本代理合约里设置代理商在另一条链所布署的代理合约，注：这里需要代理商在两条链上进行双向绑定设置。
-  3. 代理商通过调用`MsgBindAssetHash`设置本代理合约支持跨链的资产种类及另一条链相同资产的资产哈希，注：这里需要在另一条链上代理商的代理合约中也进行相似的绑定设置。
+As the service provider or lockproxy provider, the instruction to use <code>lockproxy</code> module are the followings.
+  1. First, the lockproxy creator invoke <code>MsgCreateLockProxy</code> to create the unique `MsgCreateLockProxy` lockproxy contract. The `lockproxy` contract is identified by the creator account address and managed by the creator, also knowns as operator.
+  2. The operator invokes `MsgBindProxyHash` to bind current <code>lockproxy</code> contract with another lockproxy contract deployed in another blockchain. Note that the operator should do bind proxy hash in other sides of blockchains.
+  3. The service provider or operator sets up the map from current asset hash (coin name or denom) to the same asset hash deployed in another blockchain. Note that the operator should do bind asset hash in other sides of blockchains.
 
-作为使用跨链服务的用户，可直接调用`MsgLock`来进行跨链请求。来使用<code>lockproxy</code>模块。需要注意的是要确保`MsgLock`的发送者(`MsgLock.FromAddress`)有足够的代币，而这些代币既可以来自Cosmos子链上其他人转过来的，也可以来自其他链资产通过跨链到当前Cosmos子链上发送者(`MsgLock.FromAddress`)地址而来。
+As the users of <code>lockproxy</code>, we can invoke <code>MsgLock</code> directly to send cross chain request. The precondition is that cross chain requester should make sure `MsgLock.FromAddress` have enough balance of coins.
 
-下面就详细介绍一下每个接口作用及接口中每个参数的含义。
-
+Next we explain each part of the struct in detail.
 
 ```go
 // this message is for the cross chain service provider to invoke in order to create a new lockproxy contract.
@@ -246,51 +258,9 @@ type MsgLock struct {
 ```
 
 
-## 发送跨链交易
-
-以Atom为例，
-- Cosmos子链端：因为当前Cosmos子链已有Atom资产，所以<code>operator</code>不用调用<code>CreateCoins</code>来创建新的通证，但<code>operator</code>仍需要调用<code>BindProxyHash</code>、<code>BindAssetHash</code>来进行代理和资产的映射。
-- 目标链端：需要具有AtomX资产合约及其信任的代理合约<code>LockProxy</code>，如不是很清楚该如何在目标链上进行设置，请移步至[跨链之以太坊文档](./../eth/how_to_deploy_crosschain_on_ethereum_CN.md)或[跨链之本体链文档](./../ont/How_to_new_cross_chain_asset_cn.md)。
-
-### 从当前Cosmos子链到其他目标链的跨链交易
-用户构造<code>MsgLock</code>结构体，并放到<cod>auth</code>模块中的<code>StdSignMsg</code>的<code>Msgs</code>进行签名并发送交易，即完成跨链请求
-```go
-type MsgLock struct {
-	FromAddress      sdk.AccAddress // Cosmos子链中请求跨链的发送方
-	SourceAssetDenom string         // 请求进行跨链的资产在Cosmos子链上的名称
-	ToChainId        uint64         // 目标链的ChainId
-	ToAddressBs      []byte         // 目标链上接收地址的字节数组
-	Value            *sdk.Int       // 请求进行跨链资产的数量
-}
-```
-具体如下，其中SendMsg可参考[这里](https://github.com/skyinglyh1/gaia/blob/master/x/test/crosschain_test.go#L290)。
-```go
-import (
-    rpchttp "github.com/tendermint/tendermint/rpc/client"
-)
-// new http client
-client := rpchttp.NewHTTP("tcp://cosmoms_ip:cosmos_port", "/websocket")
-// register cdc
-appCdc := app.MakeCodec()
-// obtain your cosmos account from wallet and password
-fromPriv, fromAddr, err := GetCosmosPrivateKey(user0Wallet, []byte(operatorPwd))
-// parse ont address from base58 format to byte array
-toOntAddr, _ := common.AddressFromBase58("AQf4Mzu1YJrhz9f3aRkkwSm9n3qhXGSh4p")
-toOntAmount = sdk.NewInt(100)
-// construct the MsgLock of crosschain module
-msg := crosschain.NewMsgLock(fromCosmosAddr, "umuon", 3, toOntAddr, toOntAmount)
-// broadcast the msg to the network
-if err := sendMsg(client, fromAddr, fromPriv, appCdc, msg); err != nil {
-    fmt.Errorf("sendMsg error:%v", err)
-}
-
-```
-
-### 从目标链到当前Cosmos子链的跨链交易
-从目标链发送交易的细节可以参考本体链上的发送跨链交易的请求和以太坊链上的发送跨链交易请求。该目标链上的跨链交易在目标链上执行成功后，将由目标链上的Relayer将跨链信息同步到中继链，由中继链进行验证、生成证明并全网广播。Cosmos子链的Relayer监听到中继链上的发向该Cosmos子链的交易证明后，将跨链信息通过<code>crosschain</code>模块里的<code>ProcessCrosschainTx</code>函数提交到Cosmos子链，由<code>ProcessCrossChainTx</code>来验证Relayer提交的交易信息的有效性，从而将锁定的资产从<code>crosschain</code>模块帐户转出到接收地址。
 
 
 
 ## 许可证
 
-Ontology遵守GNU Lesser General Public License, 版本3.0。 详细信息请查看项目根目录下的LICENSE文件。
+The Ontology library is licensed under the GNU Lesser General Public License v3.0. Please refer to the LICENSE file in the root directory of the project for details.
